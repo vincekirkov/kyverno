@@ -34,6 +34,7 @@ import (
 	yamlv2 "gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	k8syaml "sigs.k8s.io/yaml"
 )
@@ -754,7 +755,8 @@ func ProcessValidateEngineResponse(policy *v1.ClusterPolicy, validateResponse *r
 			continue
 		}
 
-		for i, valResponseRule := range validateResponse.PolicyResponse.Rules {
+		for _, valResponseRule := range validateResponse.PolicyResponse.Rules {
+			isLevel2 := klog.V(2).Enabled()
 			if policyRule.Name == valResponseRule.Name {
 				ruleFoundInEngineResponse = true
 				vrule := v1.ViolatedRule{
@@ -767,17 +769,28 @@ func ProcessValidateEngineResponse(policy *v1.ClusterPolicy, validateResponse *r
 				case response.RuleStatusPass:
 					rc.Pass++
 					vrule.Status = report.StatusPass
+					if !policyReport {
+						if printCount < 1 {
+							if !isLevel2 {
+								fmt.Printf("\npolicy %s -> resource %s passed", policy.Name, resPath)
+							}
+							printCount++
+						}
 
+						// fmt.Printf("%d. %s: %s \n", i+1, valResponseRule.Name, valResponseRule.Message)
+					}
 				case response.RuleStatusFail:
 					rc.Fail++
 					vrule.Status = report.StatusFail
 					if !policyReport {
 						if printCount < 1 {
-							fmt.Printf("\npolicy %s -> resource %s failed: \n", policy.Name, resPath)
+							fmt.Printf("\npolicy %s -> resource %s failed", policy.Name, resPath)
 							printCount++
 						}
+						if isLevel2 {
+							fmt.Printf("\n - %s: %s \n", valResponseRule.Name, valResponseRule.Message)
+						}
 
-						fmt.Printf("%d. %s: %s \n", i+1, valResponseRule.Name, valResponseRule.Message)
 					}
 
 				case response.RuleStatusError:
